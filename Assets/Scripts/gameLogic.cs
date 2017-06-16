@@ -16,7 +16,8 @@ public class gameLogic : MonoBehaviour
     GObject _BestScore;
     GObject _animation;
     GObject[] _aniBlocks;
-    
+    Vector3[] _blocksPositions;
+       
     private int gameLines; // 默认为4
     private int[][] gameMatrix;
     private int[][] gameMatrixHistory;
@@ -27,6 +28,7 @@ public class gameLogic : MonoBehaviour
     private int scoreHistory;
     private bool canControll = false;
     private bool isGameOver = false;
+
     void Awake()
     {
         DOTween.useSafeMode = false;
@@ -37,6 +39,7 @@ public class gameLogic : MonoBehaviour
         _blocks = new GObject[gameLines * gameLines];
         calList = new ArrayList();
         _aniBlocks = new GObject[gameLines * gameLines];
+        _blocksPositions = new Vector3[gameLines * gameLines];
         minSwipeDistance = 10; //  x pt的防误触距离。
         Config = new Configuration();
         scoreHistory = 0;
@@ -81,7 +84,8 @@ public class gameLogic : MonoBehaviour
 
         for (int i = 0; i < gameLines * gameLines; i++)
         {
-           _aniBlocks[i] = _mainView.GetChild("Animation").asCom.GetChild("a" + (i + 1).ToString());  //获取动画 contianers a1 ~ a16
+            _aniBlocks[i] = _mainView.GetChild("Animation").asCom.GetChild("a" + (i + 1).ToString());  //获取动画 contianers a1 ~ a16
+            _blocksPositions[i] = _aniBlocks[i].position;
         }
 
 
@@ -92,10 +96,44 @@ public class gameLogic : MonoBehaviour
         loadBest();
      
         _mainView.GetChild("BtnNewGame").onClick.Add(() =>   //新的游戏点击事件
-        {   reStart();
+        {
+            reStart();
             rearranage();
             loadBest();
         });
+        GComponent menuPanel = null;
+
+        _mainView.GetChild("MenuBtn").onClick.Add(() => 
+        {
+            Debug.LogWarning("MenuBtn");
+
+            menuPanel = UIPackage.CreateObject("2048_pkg", "MenuPanel").asCom;
+
+            Debug.LogWarning( menuPanel.asCom.name);
+
+            GRoot.inst.AddChild(menuPanel);
+
+            menuPanel.asCom.GetChild("ResumeBtn").onClick.Add(() =>
+            {
+                menuPanel.RemoveFromParent();
+
+            });
+
+            menuPanel.asCom.GetChild("RestartBtn").onClick.Add(() =>
+            {
+                reStart();
+                rearranage();
+                loadBest();
+                menuPanel.RemoveFromParent();
+            });
+
+        });
+
+
+        
+
+       
+
 
         rearranage(); //显示初始化矩阵
       
@@ -113,6 +151,7 @@ public class gameLogic : MonoBehaviour
            if(canControll) 
                 KeyBoardUpdate();
     }
+
     void KeyBoardUpdate()
     {
 
@@ -156,7 +195,7 @@ public class gameLogic : MonoBehaviour
             saveBest();
             Debug.Log("Game Over");
             //Application.Quit();
-
+            canControll = false;
         }
 
         else if (gameOver() == 2)
@@ -249,31 +288,39 @@ public class gameLogic : MonoBehaviour
           
             int col = mergePos[i][1];
             int endCol = mergePos[i][0];
-            Vector3 oriPos = _aniBlocks[row * 4 + col].position;
+            Vector3 oriPos = _blocksPositions[row * 4 + col];
             
             bool mergeAni = false;
             if (mergePos[i].Length == 3)
                 mergeAni = true;
             //Mathf.Abs(((endCol * 100 + 10) - (col * 100 + 10)) / Configuration.Speed)
 
-            Debug.Log("row: " + (row + 1) + " col: " + (col + 1) + " Endcol: " + (endCol + 1));
-            _aniBlocks[row * 4 + col].parent.SetChildIndex(_aniBlocks[row * 4 + col], _aniBlocks[row * 4 + col].parent.numChildren - 1);
-            
-            _aniBlocks[row * 4 + col].TweenMoveX(endCol * 100 + 10, Configuration.TimeForAni).OnComplete(() =>
-            {   
-                _aniBlocks[row * 4 + col].asLoader.visible = false;
-                _aniBlocks[row * 4 + col].asLoader.url = " ";
-                _aniBlocks[row * 4 + col].TweenMoveX(col * 100 + 10, 0.0002f);
-                _aniBlocks[row * 4 + col].asLoader.visible = true;            
-                rearranage();
-            });
-            if (mergeAni == true)
+            if (col != endCol)
             {
-                _aniBlocks[row * 4 + endCol].TweenScale(new Vector2(1.2f, 1.2f), Configuration.TimeForAni / 2).OnComplete(() =>
-                {
-                    _aniBlocks[row * 4 + endCol].TweenScale(new Vector2(1f, 1f), Configuration.TimeForAni / 2);
+                Debug.Log("row: " + (row + 1) + " col: " + (col + 1) + " Endcol: " + (endCol + 1));
+                _aniBlocks[row * 4 + col].parent.SetChildIndex(_aniBlocks[row * 4 + col], _aniBlocks[row * 4 + col].parent.numChildren - 1);
 
+                _aniBlocks[row * 4 + col].TweenMoveX(endCol * 100 + 10, Configuration.TimeForAni).OnComplete(() =>
+                {
+                    _aniBlocks[row * 4 + col].asLoader.visible = false;
+                    _aniBlocks[row * 4 + col].asLoader.url = " ";
+                    _aniBlocks[row * 4 + col].SetPosition(oriPos.x, oriPos.y, oriPos.z);  //直接设定坐标容易造成错位。
+                    //_aniBlocks[row * 4 + col].TweenMoveX(col * 100 + 10, 0.0002f);  //造成闪烁。
+                    _aniBlocks[row * 4 + col].asLoader.visible = true;
+                    rearranage();
                 });
+                if (mergeAni == true)
+                {
+                    _aniBlocks[row * 4 + endCol].TweenScale(new Vector2(1.2f, 1.2f), Configuration.TimeForAni * 0.8f).OnComplete(() =>
+                     {
+                         _aniBlocks[row * 4 + endCol].TweenScale(new Vector2(1f, 1f), Configuration.TimeForAni * 0.8f);
+
+                     });
+                }
+            }
+            else
+            {
+                continue;
             }
         }
 
@@ -287,29 +334,39 @@ public class gameLogic : MonoBehaviour
             
             int row = mergePos[i][1];
             int endRow = mergePos[i][0];
-            Vector3 oriPos = _aniBlocks[row * 4 + col].position;
+            Vector3 oriPos = _blocksPositions[row * 4 + col];
 
             bool mergeAni = false;
             if (mergePos[i].Length == 3)
                 mergeAni = true;
-             Debug.Log("col: " + (col + 1) + " row: " + (row + 1) + " EndRow: " + (endRow + 1));
-           
-            _aniBlocks[row * 4 + col].parent.SetChildIndex(_aniBlocks[row * 4 + col], _aniBlocks[row * 4 + col].parent.numChildren - 1);
-            _aniBlocks[row * 4 + col].TweenMoveY(endRow * 100 + 10, Configuration.TimeForAni).OnComplete(() =>
-            {
-                _aniBlocks[row * 4 + col].asLoader.visible = false;
-                _aniBlocks[row * 4 + col].asLoader.url = " ";
-                _aniBlocks[row * 4 + col].TweenMoveY(row * 100 + 10, 0.0002f);
-                _aniBlocks[row * 4 + col].asLoader.visible = true;
-                rearranage();
-            });
-            if (mergeAni == true)
-            {
-                _aniBlocks[endRow * 4 + col].TweenScale(new Vector2(1.2f, 1.2f), Configuration.TimeForAni/2).OnComplete(() =>
-                {
-                    _aniBlocks[endRow * 4 + col].TweenScale(new Vector2(1f, 1f), Configuration.TimeForAni/2);
 
+            if (row != endRow)
+            {
+                Debug.Log("col: " + (col + 1) + " row: " + (row + 1) + " EndRow: " + (endRow + 1));
+
+
+                _aniBlocks[row * 4 + col].parent.SetChildIndex(_aniBlocks[row * 4 + col], _aniBlocks[row * 4 + col].parent.numChildren - 1);
+                _aniBlocks[row * 4 + col].TweenMoveY(endRow * 100 + 10, Configuration.TimeForAni).OnComplete(() =>
+                {
+                    _aniBlocks[row * 4 + col].asLoader.visible = false;
+                    _aniBlocks[row * 4 + col].asLoader.url = " ";
+                    _aniBlocks[row * 4 + col].SetPosition(oriPos.x, oriPos.y, oriPos.z);  //直接设定坐标容易造成错位。
+                    //_aniBlocks[row * 4 + col].TweenMoveY(row * 100 + 10, 0.0002f);
+                    _aniBlocks[row * 4 + col].asLoader.visible = true;
+                    rearranage();
                 });
+                if (mergeAni == true)
+                {
+                    _aniBlocks[endRow * 4 + col].TweenScale(new Vector2(1.2f, 1.2f), Configuration.TimeForAni * 0.8f).OnComplete(() =>
+                    {
+                        _aniBlocks[endRow * 4 + col].TweenScale(new Vector2(1f, 1f), Configuration.TimeForAni * 0.8f);
+
+                    });
+                }
+            }
+            else
+            {
+                continue;
             }
 
         }
@@ -632,9 +689,10 @@ public class gameLogic : MonoBehaviour
                             temp[1] = j;
                             temp[2] = -1;
                             mergePos.Add(temp);
+
                             calList.Add(keyItemNum * 2);
                             Config.Score += keyItemNum * 2;
-
+                            keyItemNum = -1;
                         }
                         else
                         {
@@ -822,9 +880,9 @@ public class gameLogic : MonoBehaviour
         _aniBlocks[row * 4 + col].visible = false;
         _aniBlocks[row * 4 + col].asLoader.url = URL;
         _aniBlocks[row * 4 + col].visible = true;
-        _aniBlocks[row * 4 + col].TweenScale(new Vector2(0.6f, 0.6f), Configuration.TimeForAni/4).OnComplete(() =>
+        _aniBlocks[row * 4 + col].TweenScale(new Vector2(0.6f, 0.6f), Configuration.TimeForAni*0.8f).OnComplete(() =>
         {
-            _aniBlocks[row * 4 + col].TweenScale(new Vector2(1, 1), Configuration.TimeForAni /2);
+            _aniBlocks[row * 4 + col].TweenScale(new Vector2(1, 1), Configuration.TimeForAni * 0.8f);
         });
        
         
